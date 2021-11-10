@@ -1,0 +1,32 @@
+users = {
+    handle,
+    email,
+    password,
+    dishCount,
+    resCount,
+    locCount,
+    image,
+    date,
+    bio,
+}
+
+locations = {
+    city, 
+    state,
+    country,
+    star,
+}
+
+restaurant = {
+    body,
+    locationId,
+    star,
+}
+
+dish = {
+    resId,
+    userHandle,
+    name,
+    body,
+    star,
+}

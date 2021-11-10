@@ -16,36 +16,40 @@ exports.postNewLocation = (req, res) => {
 
   newLocation.state = isEmpty(req.body.state) ? "" : req.body.state;
 
-  const {valid, errors} = validateLocation(newLocation);
+  const {errors, valid} = validateLocation(newLocation);
 
   if (!valid) return res.status(400).json(errors);
 
+  let resLocation;
   // Check if location with same name exists
   db.collection("locations")
       .where("userHandle", "==", req.user.handle)
       .get()
       .then((locData) => {
         locData.forEach((loc) => {
-          if (loc.data().city.trim().toLowerCase() === req.body.city.trim().toLowerCase()) {
+          if (loc.data().city.trim().toLowerCase() ===
+                  req.body.city.trim().toLowerCase()) {
             return res.status(400).json({error: "City already exists"});
           }
         });
-        // if not, add new location
+        return db.doc(`/users/${req.user.handle}`)
+            .get();
+      })
+      .then((user) => {
+        if (!user.exists) {
+          return res.status(404).json({error: "User not found"});
+        }
+        return user.ref.update({locCount: user.data().locCount + 1});
+      })
+      .then(() => {
+        // Add new location
         return db.collection("locations")
             .add(newLocation);
       })
       .then((doc) => {
-        const resLocation = newLocation;
+        resLocation = newLocation;
         resLocation.locId = doc.id;
-        db.doc(`/users/${req.user.handle}`)
-            .get()
-            .then((doc) => {
-              if (!doc.exists) {
-                return res.status(404).json({error: "User not found"});
-              }
-              doc.ref.update({locCount: doc.data().locCount + 1});
-            });
-        res.json(resLocation);
+        return res.json(resLocation);
       })
       .catch((err) => {
         res.status(500).json({error: "Something went wrong"});
@@ -91,21 +95,48 @@ exports.getLocation = (req, res) => {
       });
 };
 
-// Star/unstar location star
-exports.updateLocStar = (req, res) => {
-  let locData;
+// Delete a location
+exports.deleteLocation = (req, res) => {
+  const batch = db.batch();
   db.doc(`/locations/${req.params.locId}`)
       .get()
       .then((doc) => {
         if (!doc.exists) {
           return res.status(404).json({error: "Location not found"});
+        } else if (doc.data().userHandle !== req.user.handle) {
+          return res.status(403).json({error: "Unauthorized"});
+        } else {
+          batch.delete(doc.ref);
+          return db.collection("restaurants")
+              .where("locId", "==", req.params.locId)
+              .get();
         }
-        locData = doc.data();
-        return doc.ref.update({star: !doc.data().star});
+      })
+      .then((restaurants) => {
+        console.log("here");
+        restaurants.forEach((restaurant) => {
+          db.collection("dishes")
+              .where("resId", "==", restaurant.id)
+              .get()
+              .then((data) => {
+                data.forEach((dish) => batch.delete(dish.ref));
+              });
+          batch.delete(restaurant.ref);
+        });
+        return db.doc(`/users/${req.user.handle}`)
+            .get();
+      })
+      .then((user) => {
+        if (!user.exists) {
+          return res.status(404).json({error: "User not found"});
+        }
+        return batch.update(user.ref, {locCount: user.data().locCount - 1});
       })
       .then(() => {
-        locData.star = !locData.star;
-        return res.json(locData);
+        return batch.commit();
+      })
+      .then(() => {
+        return res.json({message: "Location successfully deleted"});
       })
       .catch((err) => {
         console.error(err);
@@ -113,37 +144,3 @@ exports.updateLocStar = (req, res) => {
       });
 };
 
-// Delete a location
-exports.deleteLocation = (req, res) => {
-  const document = db.doc(`/locations/${req.params.locId}`);
-  document
-      .get()
-      .then((doc) => {
-        if (!doc.exists) {
-          return res.status(404).json({error: "Location not found"});
-        }
-        if (doc.data().userHandle !== req.user.handle) {
-          return res.status(403).json({error: "Unauthorized"});
-        }
-        return document.delete();
-      })
-      .then(() => {
-        return db.collection("restaurants")
-            .where("locId", "==", req.params.locId)
-            .get();
-      })
-      .then((resData) => {
-        resData.forEach((resDoc) => {
-          const dishes = db.collection("dishes")
-              .where("resId", "==", resDoc.id)
-              .get();
-          dishes.forEach((dish) => dish.delete());
-          resDoc.delete();
-        });
-        res.json({message: "Location deleted successfully"});
-      })
-      .catch((err) => {
-        console.error(err);
-        return res.status(500).json({error: err.code});
-      });
-};

@@ -17,10 +17,26 @@ const {
 const {
   postNewLocation,
   getLocation,
-  updateLocStar,
   deleteLocation,
 } = require("./handlers/locations");
-const {postNewRestaurant, getRestaurant, updateResStar} = require("./handlers/restaurants");
+
+const {
+  postNewRestaurant,
+  getRestaurant,
+  deleteRestaurant,
+} = require("./handlers/restaurants");
+
+const {
+  postNewDish,
+  getDish,
+  deleteDish,
+} = require("./handlers/dishes");
+
+const {
+  updateStar,
+  updateName,
+  updateBody,
+} = require("./handlers/edits");
 
 // Login Routes
 app.post("/signup", signup);
@@ -31,13 +47,22 @@ app.get("/user", FBAuth, getAuthenticatedUser);
 // Location Routes
 app.post("/locations", FBAuth, postNewLocation);
 app.get("/locations/:locId", FBAuth, getLocation);
-app.post("/locations/:locId/star", FBAuth, updateLocStar);
 app.delete("/locations/:locId", FBAuth, deleteLocation);
 
 // Restaurant Routes
 app.post("/restaurants", FBAuth, postNewRestaurant);
 app.get("/restaurants/:resId", FBAuth, getRestaurant);
-app.post("/restaurants/:resId/star", FBAuth, updateResStar);
+app.delete("/restaurants/:resId", FBAuth, deleteRestaurant);
+
+// Dish Routes
+app.post("/dishes", FBAuth, postNewDish);
+app.get("/dishes/:dishId", FBAuth, getDish);
+app.delete("/dishes/:dishId", FBAuth, deleteDish);
+
+// Shared Edit Routes
+app.post("/edit/:id/star", FBAuth, updateStar);
+app.post("/edit/:id/name", FBAuth, updateName);
+app.post("/edit/:id/body", FBAuth, updateBody);
 
 exports.api = functions.region("us-central1").https.onRequest(app);
 

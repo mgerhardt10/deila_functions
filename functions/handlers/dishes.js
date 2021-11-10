@@ -3,31 +3,48 @@ const {
   isEmpty,
 } = require("../utils/validators");
 
-exports.postNewDish = (res, req) => {
+// Add a new dish
+exports.postNewDish = (req, res) => {
   if (isEmpty(req.body.name)) {
     return res.status(400).json({dish: "Name cannot be empty"});
   }
 
+  if (isEmpty(req.body.resId)) {
+    return res.status(400).json({dish: "ResId cannot be empty"});
+  }
+
   const newDish = {
-    resId: req.params.resId,
+    resId: req.body.resId,
     createdAt: new Date().toISOString(),
     name: req.body.name,
-    body: "",
     star: false,
   };
 
-  // Update user -> find restaurant -> add dish
-  db.doc(`/users/${req.user.handle}`)
+  newDish.body = isEmpty(req.body.body) ? "" : req.body.body;
+
+  // Check if dish with same name exists
+  db.collection("dishes")
+      .where("resId", "==", req.body.resId)
       .get()
+      .then((dishes) => {
+        dishes.forEach((dish) => {
+          if (dish.data().name.trim().toLowerCase() ===
+                    req.body.name.trim().toLowerCase()) {
+            return res.status(400).json({error: "Dish already exists"});
+          }
+        });
+        // if not, get user
+        return db.doc(`/users/${req.user.handle}`)
+            .get();
+      })
       .then((user) => {
         if (!user.exists) {
           return res.status(404).json({error: "User not found"});
         }
-        user.ref.update({dishCount: user.data().dishCount + 1});
-        return db.collection("restaurants")
-            .where("resId", "==", req.params.resId)
-            .limit(1)
-            .get();
+        return user.ref.update({dishCount: user.data().dishCount + 1});
+      })
+      .then(() => {
+        return db.doc(`/restaurants/${req.body.resId}`).get();
       })
       .then((resDoc) => {
         if (!resDoc.exists) {
@@ -47,17 +64,17 @@ exports.postNewDish = (res, req) => {
 };
 
 // Fetch dish
-exports.getOneDish = (req, res) => {
-  db.collection("dishes")
-      .where("dishId", "==", req.params.dishId)
-      .where("resId", "==", req.params.resId)
-      .limit(1)
+exports.getDish = (req, res) => {
+  const dishData = {};
+  db.doc(`/dishes/${req.params.dishId}`)
       .get()
       .then((doc) => {
         if (!doc.exists) {
           return res.status(404).json({error: "Dish not found"});
         }
-        return res.json(doc);
+        dishData.dish = doc.data();
+        dishData.dishId = doc.id;
+        return res.json(dishData);
       })
       .catch((err) => {
         console.error(err);
@@ -65,86 +82,49 @@ exports.getOneDish = (req, res) => {
       });
 };
 
-// Star/Unstar a restaurant
-exports.updateDishStar = (req, res) => {
-  let dishData;
-
-  db.collection("dishes")
-      .where("dishId", "==", req.params.dishId)
-      .where("resId", "==", req.params.resId)
-      .limit(1)
-      .get()
-      .then((doc) => {
-        if (!doc.exists) {
-          return res.status(404).json({error: "Dish not found"});
-        }
-        dishData = doc.data();
-        return doc.ref.update({star: !doc.data().star});
-      })
-      .then(() => {
-        dishData.star = !dishData.star;
-        return res.json(dishData);
-      })
-      .catch((err) => {
-        console.error(err);
-        return res.status(500).json({error: err.code});
-      });
-};
-
-// Update a dish name
-exports.updateDishName = (req, res) => {
-  if (isEmpty(req.body.name)) {
-    return res.status(404).json({error: "Name cannot be empty"});
-  }
-
-  let docData;
-
-  db.collection("dishes")
-      .where("dishId", "==", req.params.dishId)
-      .where("resId", "==", req.params.resId)
-      .limit(1)
-      .get()
-      .then((doc) => {
-        if (!doc.exists) {
-          return res.status(404).json({error: "Dish not found"});
-        }
-        docData = doc.data();
-        return doc.ref.update({name: req.body.name});
-      })
-      .then(() => {
-        docData.name = req.body.name;
-        res.json(docData);
-      })
-      .catch((err) => {
-        console.error(err);
-        return res.status(500).json({error: err.code});
-      });
-};
-
 // Delete a dish
 exports.deleteDish = (req, res) => {
-  // Verify user then delete
-  db.doc(`/users/${req.user.handle}`)
+  const batch = db.batch();
+  let dishDoc;
+  db.doc(`/dishes/${req.params.dishId}`)
       .get()
+      .then((doc) => {
+        if (!doc.exists) {
+          return res.status(404).json({error: "Dish not found"});
+        } else {
+          dishDoc = doc;
+          return db.doc(`/restaurants/${doc.data().resId}`).get();
+        }
+      })
+      .then((resDoc) => {
+        if (!resDoc.exists) {
+          return res.status(404).json({error: "Restaurant not found"});
+        } else {
+          return db.doc(`/locations/${resDoc.data().locId}`).get();
+        }
+      })
+      .then((locDoc) => {
+        if (!locDoc.exists) {
+          return res.status(404).json({error: "Location not found"});
+        } else if (locDoc.data().userHandle !== req.user.handle) {
+          return res.status(403).json({error: "Unauthorized"});
+        } else {
+          batch.delete(dishDoc.ref);
+          return db.doc(`/users/${req.user.handle}`)
+              .get();
+        }
+      })
       .then((user) => {
         if (!user.exists) {
           return res.status(404).json({error: "User not found"});
         }
-        user.ref.update({dishCount: user.data().dishCount - 1});
-        return db.collection("dishes")
-            .where("dishId", "==", req.params.dishId)
-            .where("resId", "==", req.params.resId)
-            .limit(1)
-            .get();
-      })
-      .then((dish) => {
-        if (!dish.exists) {
-          return res.status(404).json({error: "Dish not found"});
-        }
-        return dish.delete();
+        return batch.update(user.ref, {dishCount: user.data().dishCount - 1});
       })
       .then(() => {
-        res.json({message: "Dish deleted successfully"});
+        return batch.commit();
+      })
+      .then(() => {
+        return res.json({message: "Dish successfully deleted"});
       })
       .catch((err) => {
         console.error(err);

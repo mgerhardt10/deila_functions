@@ -24,13 +24,14 @@ exports.postNewRestaurant = (req, res) => {
 
   newRestaurant.body = isEmpty(req.body.body) ? "" : req.body.body;
 
-  // Check if location with same name exists
+  // Check if restaurant with same name exists
   db.collection("restaurants")
       .where("locId", "==", req.body.locId)
       .get()
       .then((resData) => {
         resData.forEach((resDoc) => {
-          if (resDoc.data().name.trim().toLowerCase() === req.body.name.trim().toLowerCase()) {
+          if (resDoc.data().name.trim().toLowerCase() ===
+              req.body.name.trim().toLowerCase()) {
             return res.status(400).json({error: "Restaurant already exists"});
           }
         });
@@ -42,12 +43,10 @@ exports.postNewRestaurant = (req, res) => {
         if (!user.exists) {
           return res.status(404).json({error: "User not found"});
         }
-        user.ref.update({resCount: user.data().resCount + 1});
-        return db.collection("locations")
-            .where("locId", "==", req.body.locId)
-            .where("userHandle", "==", req.user.handle)
-            .limit(1)
-            .get();
+        return user.ref.update({resCount: user.data().resCount + 1});
+      })
+      .then(() => {
+        return db.doc(`/locations/${req.body.locId}`).get();
       })
       .then((loc) => {
         if (!loc.exists) {
@@ -66,22 +65,29 @@ exports.postNewRestaurant = (req, res) => {
       });
 };
 
-// Get a restaurant
+// Fetch restaurant
 exports.getRestaurant = (req, res) => {
-  if (isEmpty(req.body.locId)) {
-    return res.status(400).json({restaurant: "LocId cannot be empty"});
-  }
-
-  db.collection("restaurants")
-      .where("resId", "==", req.params.resId)
-      .where("locId", "==", req.body.locId)
-      .limit(1)
+  const resData = {};
+  db.doc(`/restaurants/${req.params.resId}`)
       .get()
       .then((doc) => {
         if (!doc.exists) {
           return res.status(404).json({error: "Restaurant not found"});
         }
-        return res.json(doc);
+        resData.restaurant = doc.data();
+        resData.resId = doc.id;
+        return db
+            .collection("dishes")
+            .where("resId", "==", doc.id)
+            .orderBy("createdAt", "desc")
+            .get();
+      })
+      .then((dishes) => {
+        resData.dishes = [];
+        dishes.forEach((dish) => {
+          resData.dishes.push(dish.data());
+        });
+        return res.json(resData);
       })
       .catch((err) => {
         console.error(err);
@@ -91,94 +97,46 @@ exports.getRestaurant = (req, res) => {
 
 // Delete a restaurant
 exports.deleteRestaurant = (req, res) => {
-  // Verify user then delete
-  db.doc(`/users/${req.user.handle}`)
+  const batch = db.batch();
+  let resDoc;
+  db.doc(`/restaurants/${req.params.resId}`)
       .get()
+      .then((doc) => {
+        if (!doc.exists) {
+          return res.status(404).json({error: "Restaurant not found"});
+        } else {
+          resDoc = doc;
+          return db.doc(`/locations/${doc.data().locId}`).get();
+        }
+      })
+      .then((locDoc) => {
+        if (!locDoc.exists) {
+          return res.status(404).json({error: "Location not found"});
+        } else if (locDoc.data().userHandle !== req.user.handle) {
+          return res.status(403).json({error: "Unauthorized"});
+        } else {
+          batch.delete(resDoc.ref);
+          return db.collection("dishes")
+              .where("resId", "==", req.params.resId)
+              .get();
+        }
+      })
+      .then((dishes) => {
+        dishes.forEach((dish) => batch.delete(dish.ref));
+        return db.doc(`/users/${req.user.handle}`)
+            .get();
+      })
       .then((user) => {
         if (!user.exists) {
           return res.status(404).json({error: "User not found"});
         }
-        user.ref.update({resCount: user.data().resCount - 1});
-        return db.collection("restaurants")
-            .where("resId", "==", req.params.resId)
-            .where("locId", "==", req.params.locId)
-            .limit(1)
-            .get();
-      })
-      .then((restaurant) => {
-        if (!restaurant.exists) {
-          return res.status(404).json({error: "Restaurant not found"});
-        }
-        return restaurant.delete();
+        return batch.update(user.ref, {resCount: user.data().resCount - 1});
       })
       .then(() => {
-        res.json({message: "Restaurant deleted successfully"});
-      })
-      .catch((err) => {
-        console.error(err);
-        return res.status(500).json({error: err.code});
-      });
-};
-
-// Star/Unstar a restaurant
-exports.updateResStar = (req, res) => {
-  let resData;
-
-  if (isEmpty(req.body.locId)) {
-    return res.status(400).json({restaurant: "LocId cannot be empty"});
-  }
-
-  db.collection("restaurants")
-      .where("resId", "==", req.params.resId)
-      .where("locId", "==", req.body.locId)
-      .limit(1)
-      .get()
-      .then((doc) => {
-        if (!doc.exists) {
-          return res.status(404).json({error: "Restaurant not found"});
-        }
-        resData = doc.data();
-        return doc.ref.update({star: !doc.data().star});
+        return batch.commit();
       })
       .then(() => {
-        resData.star = !resData.star;
-        return res.json(resData);
-      })
-      .catch((err) => {
-        console.error(err);
-        return res.status(500).json({error: err.code});
-      });
-};
-
-// Update a restaurant
-exports.updateRestaurant = (req, res) => {
-  // If starred is not specified, body must have content
-  if (isEmpty(req.body.body) && req.body.star === null) {
-    return res.status(404).json({error: "Body cannot be empty"});
-  }
-
-  if (isEmpty(req.body.resId)) {
-    return res.status(400).json({dish: "ResId cannot be empty"});
-  }
-
-  db.collection("dishes")
-      .where("dishId", "==", req.params.dishId)
-      .where("resId", "==", req.body.resId)
-      .limit(1)
-      .get()
-      .then((doc) => {
-        if (!doc.exists) {
-          return res.status(404).json({error: "Dish not found"});
-        }
-        // If star has been changed
-        if (doc.data().star !== req.body.star && req.body.star !== null) {
-          doc.ref.update({star: req.body.star});
-        }
-        // If body has changed
-        if (!isEmpty(req.body.body)) {
-          doc.ref.update({body: req.body.body});
-        }
-        return res.json(doc.data());
+        return res.json({message: "Restaurant successfully deleted"});
       })
       .catch((err) => {
         console.error(err);

@@ -14,7 +14,7 @@ exports.postNewLocation = (req, res) => {
     star: false,
   };
 
-  newLocation.state = isEmpty(req.body.state) ? "" : req.body.state;
+  newLocation.state = (!req.body.state || isEmpty(req.body.state)) ? "" : req.body.state;
 
   const {errors, valid} = validateLocation(newLocation);
 

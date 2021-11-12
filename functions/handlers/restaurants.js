@@ -1,7 +1,9 @@
 const {db} = require("../utils/admin");
 const {
   isEmpty,
+  validatePhoneNumber,
 } = require("../utils/validators");
+const {options} = require("../utils/assets");
 
 // Add a new resturant
 exports.postNewRestaurant = (req, res) => {
@@ -18,11 +20,10 @@ exports.postNewRestaurant = (req, res) => {
     createdAt: new Date().toISOString(),
     name: req.body.name,
     star: false,
-    address: "",
-    phone: "",
   };
 
-  newRestaurant.body = isEmpty(req.body.body) ? "" : req.body.body;
+  newRestaurant.body = (!req.body.body || isEmpty(req.body.body)) ? "" : req.body.body;
+  newRestaurant.phone = (!req.body.phone || isEmpty(req.body.phone)) ? "" : req.body.phone;
 
   // Check if restaurant with same name exists
   db.collection("restaurants")
@@ -137,6 +138,35 @@ exports.deleteRestaurant = (req, res) => {
       })
       .then(() => {
         return res.json({message: "Restaurant successfully deleted"});
+      })
+      .catch((err) => {
+        console.error(err);
+        return res.status(500).json({error: err.code});
+      });
+};
+
+// Update a phone number
+exports.updatePhone = (req, res) => {
+  // const {errors, valid} = validatePhoneNumber(req.body.phone);
+  // if (!valid) return res.status(400).json(errors);
+
+  if (isEmpty(req.body.phone)) {
+    return res.status(400).json({restaurant: "Phone cannot be empty"});
+  }
+
+  let resData;
+  db.doc(`/restaurants/${req.params.resId}`)
+      .get()
+      .then((doc) => {
+        if (!doc.exists) {
+          return res.status(404).json({error: "Restaurant not found"});
+        }
+        resData = doc.data();
+        return doc.ref.update({phone: req.body.number});
+      })
+      .then(() => {
+        resData.phone = req.body.number;
+        return res.json(resData);
       })
       .catch((err) => {
         console.error(err);

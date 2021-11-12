@@ -9,6 +9,24 @@ exports.isEmpty = (str) => {
   else return false;
 };
 
+exports.validatePhoneNumber = (number) => {
+  const errors = {};
+  const regEx = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/im;
+
+  if (exports.isEmpty(number)) {
+    errors.phone = "Number cannot be empty";
+  }
+
+  if (!number.match(regEx)) {
+    errors.phone = "Invalid phone number";
+  }
+
+  return {
+    errors,
+    valid: Object.keys(errors).length === 0 ? true : false,
+  };
+};
+
 exports.validateSignupData = (data) => {
   const errors = {};
 

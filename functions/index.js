@@ -5,8 +5,6 @@ const FBAuth = require("./utils/fbAuth");
 const cors = require("cors");
 app.use(cors());
 
-const {db} = require("./utils/admin");
-
 const {
   signup,
   login,
@@ -23,7 +21,7 @@ const {
 const {
   postNewRestaurant,
   getRestaurant,
-  deleteRestaurant,
+  deleteRestaurant, updatePhone,
 } = require("./handlers/restaurants");
 
 const {
@@ -53,6 +51,7 @@ app.delete("/locations/:locId", FBAuth, deleteLocation);
 app.post("/restaurants", FBAuth, postNewRestaurant);
 app.get("/restaurants/:resId", FBAuth, getRestaurant);
 app.delete("/restaurants/:resId", FBAuth, deleteRestaurant);
+app.post("/restaurants/:resId/phone", FBAuth, updatePhone);
 
 // Dish Routes
 app.post("/dishes", FBAuth, postNewDish);

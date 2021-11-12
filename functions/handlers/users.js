@@ -130,8 +130,52 @@ exports.getAuthenticatedUser = (req, res) => {
             createdAt: locDoc.data().createdAt,
             star: locDoc.data().star,
             locId: locDoc.id,
+            restaurants: [],
           });
         });
+      })
+      .then(() => {
+        userData.locations.forEach((location) => {
+          const resData = db
+              .collection("restaurants")
+              .where("locId", "==", location.locId)
+              .orderBy("createdAt", "desc")
+              .get();
+          resData.forEach((resDoc) => {
+            location.restaurants.push({
+              name: resDoc.data().name,
+              phone: resDoc.data().phone,
+              body: resDoc.data().body,
+              createdAt: resDoc.data().createdAt,
+              star: resDoc.data().star,
+              locId: location.locId,
+              resId: resDoc.id,
+            });
+          });
+        });
+      })
+      .then(() => {
+        userData.locations.forEach((location) => {
+          location.restaurants.forEach((restaurant) => {
+            const dishData = db
+                .collection("dishes")
+                .where("resId", "==", restaurant.resId)
+                .orderBy("createdAt", "desc")
+                .get();
+            dishData.forEach((dish) => {
+              restaurant.push({
+                name: dish.data().name,
+                body: dish.data().body,
+                createdAt: dish.data().createdAt,
+                star: dish.data().star,
+                dishId: dish.id,
+                resId: restaurant.resId,
+              });
+            });
+          });
+        });
+      })
+      .then(() => {
         return res.json(userData);
       })
       .catch((err) => {

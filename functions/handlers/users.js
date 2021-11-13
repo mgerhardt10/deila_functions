@@ -10,6 +10,7 @@ const {
   validateSignupData,
   validateLoginData,
 } = require("../utils/validators");
+const {user} = require("firebase-functions/lib/providers/auth");
 
 // User signup
 exports.signup = (req, res) => {
@@ -133,49 +134,48 @@ exports.getAuthenticatedUser = (req, res) => {
             restaurants: [],
           });
         });
+        return db.collection("restaurants")
+            .where("userHandle", "==", req.user.handle)
+            .get();
       })
-      .then(() => {
-        userData.locations.forEach((location) => {
-          const resData = db
-              .collection("restaurants")
-              .where("locId", "==", location.locId)
-              .orderBy("createdAt", "desc")
-              .get();
-          resData.forEach((resDoc) => {
-            location.restaurants.push({
-              name: resDoc.data().name,
-              phone: resDoc.data().phone,
-              body: resDoc.data().body,
-              createdAt: resDoc.data().createdAt,
-              star: resDoc.data().star,
-              locId: location.locId,
-              resId: resDoc.id,
-            });
-          });
-        });
-      })
-      .then(() => {
-        userData.locations.forEach((location) => {
-          location.restaurants.forEach((restaurant) => {
-            const dishData = db
-                .collection("dishes")
-                .where("resId", "==", restaurant.resId)
-                .orderBy("createdAt", "desc")
-                .get();
-            dishData.forEach((dish) => {
-              restaurant.push({
-                name: dish.data().name,
-                body: dish.data().body,
-                createdAt: dish.data().createdAt,
-                star: dish.data().star,
-                dishId: dish.id,
-                resId: restaurant.resId,
+      .then((resData) => {
+        resData.forEach((restaurant) => {
+          for (let i = 0; i < userData.locations.length; i++) {
+            if (restaurant.data().locId === userData.locations[i].locId) {
+              userData.locations[i].restaurants.push({
+                name: restaurant.data().name,
+                phone: restaurant.data().phone,
+                body: restaurant.data().body,
+                createdAt: restaurant.data().createdAt,
+                star: restaurant.data().star,
+                locId: restaurant.data().locId,
+                resId: restaurant.id,
+                dishes: [],
               });
-            });
-          });
+            }
+          }
         });
+        return db.collection("dishes")
+            .where("userHandle", "==", req.user.handle)
+            .get();
       })
-      .then(() => {
+      .then((dishes) => {
+        dishes.forEach((dish) => {
+          for (let i = 0; i < userData.locations.length; i++) {
+            for (let j = 0; j < userData.locations[i].restaurants.length; j++) {
+              if (userData.locations[i].restaurants[j].resId === dish.data().resId) {
+                userData.locations[i].restaurants[j].dishes.push({
+                  name: dish.data().name,
+                  body: dish.data().body,
+                  createdAt: dish.data().createdAt,
+                  star: dish.data().star,
+                  dishId: dish.id,
+                  resId: dish.data().resId,
+                });
+              }
+            }
+          }
+        });
         return res.json(userData);
       })
       .catch((err) => {

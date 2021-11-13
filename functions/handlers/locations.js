@@ -85,6 +85,7 @@ exports.getLocation = (req, res) => {
             createdAt: resDoc.data().createdAt,
             star: resDoc.data().star,
             resId: resDoc.id,
+            userHandle: resDoc.data().userHandle,
           });
         });
         return res.json(locData);
@@ -113,7 +114,6 @@ exports.deleteLocation = (req, res) => {
         }
       })
       .then((restaurants) => {
-        console.log("here");
         restaurants.forEach((restaurant) => {
           db.collection("dishes")
               .where("resId", "==", restaurant.id)

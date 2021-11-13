@@ -18,6 +18,7 @@ exports.postNewDish = (req, res) => {
     createdAt: new Date().toISOString(),
     name: req.body.name,
     star: false,
+    userHandle: req.user.handle,
   };
 
   newDish.body = isEmpty(req.body.body) ? "" : req.body.body;
@@ -85,31 +86,15 @@ exports.getDish = (req, res) => {
 // Delete a dish
 exports.deleteDish = (req, res) => {
   const batch = db.batch();
-  let dishDoc;
   db.doc(`/dishes/${req.params.dishId}`)
       .get()
       .then((doc) => {
         if (!doc.exists) {
           return res.status(404).json({error: "Dish not found"});
-        } else {
-          dishDoc = doc;
-          return db.doc(`/restaurants/${doc.data().resId}`).get();
-        }
-      })
-      .then((resDoc) => {
-        if (!resDoc.exists) {
-          return res.status(404).json({error: "Restaurant not found"});
-        } else {
-          return db.doc(`/locations/${resDoc.data().locId}`).get();
-        }
-      })
-      .then((locDoc) => {
-        if (!locDoc.exists) {
-          return res.status(404).json({error: "Location not found"});
-        } else if (locDoc.data().userHandle !== req.user.handle) {
+        } else if (doc.data().userHandle !== req.user.handle) {
           return res.status(403).json({error: "Unauthorized"});
         } else {
-          batch.delete(dishDoc.ref);
+          batch.delete(doc.ref);
           return db.doc(`/users/${req.user.handle}`)
               .get();
         }

@@ -20,6 +20,7 @@ exports.postNewRestaurant = (req, res) => {
     createdAt: new Date().toISOString(),
     name: req.body.name,
     star: false,
+    userHandle: req.user.handle,
   };
 
   newRestaurant.body = (!req.body.body || isEmpty(req.body.body)) ? "" : req.body.body;
@@ -99,24 +100,15 @@ exports.getRestaurant = (req, res) => {
 // Delete a restaurant
 exports.deleteRestaurant = (req, res) => {
   const batch = db.batch();
-  let resDoc;
   db.doc(`/restaurants/${req.params.resId}`)
       .get()
       .then((doc) => {
         if (!doc.exists) {
           return res.status(404).json({error: "Restaurant not found"});
-        } else {
-          resDoc = doc;
-          return db.doc(`/locations/${doc.data().locId}`).get();
-        }
-      })
-      .then((locDoc) => {
-        if (!locDoc.exists) {
-          return res.status(404).json({error: "Location not found"});
-        } else if (locDoc.data().userHandle !== req.user.handle) {
+        } else if (doc.data().userHandle !== req.user.handle) {
           return res.status(403).json({error: "Unauthorized"});
         } else {
-          batch.delete(resDoc.ref);
+          batch.delete(doc.ref);
           return db.collection("dishes")
               .where("resId", "==", req.params.resId)
               .get();

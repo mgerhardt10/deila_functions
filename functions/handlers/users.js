@@ -131,7 +131,7 @@ exports.getAuthenticatedUser = (req, res) => {
             createdAt: locDoc.data().createdAt,
             star: locDoc.data().star,
             locId: locDoc.id,
-            restaurants: [],
+            // restaurants: [],
           });
         });
         return db.collection("restaurants")
@@ -139,42 +139,61 @@ exports.getAuthenticatedUser = (req, res) => {
             .get();
       })
       .then((resData) => {
+        userData.restaurants = [];
         resData.forEach((restaurant) => {
-          for (let i = 0; i < userData.locations.length; i++) {
-            if (restaurant.data().locId === userData.locations[i].locId) {
-              userData.locations[i].restaurants.push({
-                name: restaurant.data().name,
-                phone: restaurant.data().phone,
-                body: restaurant.data().body,
-                createdAt: restaurant.data().createdAt,
-                star: restaurant.data().star,
-                locId: restaurant.data().locId,
-                resId: restaurant.id,
-                dishes: [],
-              });
-            }
-          }
+          userData.restaurants.push({
+            name: restaurant.data().name,
+            phone: restaurant.data().phone,
+            body: restaurant.data().body,
+            createdAt: restaurant.data().createdAt,
+            star: restaurant.data().star,
+            locId: restaurant.data().locId,
+            resId: restaurant.id,
+          });
+          // for (let i = 0; i < userData.locations.length; i++) {
+          //   if (restaurant.data().locId === userData.locations[i].locId) {
+          //     userData.locations[i].restaurants.push({
+          //       name: restaurant.data().name,
+          //       phone: restaurant.data().phone,
+          //       body: restaurant.data().body,
+          //       createdAt: restaurant.data().createdAt,
+          //       star: restaurant.data().star,
+          //       locId: restaurant.data().locId,
+          //       resId: restaurant.id,
+          //       dishes: [],
+          //     });
+          //   }
+          // }
         });
         return db.collection("dishes")
             .where("userHandle", "==", req.user.handle)
             .get();
       })
       .then((dishes) => {
+        userData.dishes = [];
         dishes.forEach((dish) => {
-          for (let i = 0; i < userData.locations.length; i++) {
-            for (let j = 0; j < userData.locations[i].restaurants.length; j++) {
-              if (userData.locations[i].restaurants[j].resId === dish.data().resId) {
-                userData.locations[i].restaurants[j].dishes.push({
-                  name: dish.data().name,
-                  body: dish.data().body,
-                  createdAt: dish.data().createdAt,
-                  star: dish.data().star,
-                  dishId: dish.id,
-                  resId: dish.data().resId,
-                });
-              }
-            }
-          }
+          userData.dishes.push({
+            name: dish.data().name,
+            body: dish.data().body,
+            createdAt: dish.data().createdAt,
+            star: dish.data().star,
+            dishId: dish.id,
+            resId: dish.data().resId,
+          });
+          // for (let i = 0; i < userData.locations.length; i++) {
+          //   for (let j = 0; j < userData.locations[i].restaurants.length; j++) {
+          //     if (userData.locations[i].restaurants[j].resId === dish.data().resId) {
+          //       userData.locations[i].restaurants[j].dishes.push({
+          //         name: dish.data().name,
+          //         body: dish.data().body,
+          //         createdAt: dish.data().createdAt,
+          //         star: dish.data().star,
+          //         dishId: dish.id,
+          //         resId: dish.data().resId,
+          //       });
+          //     }
+          //   }
+          // }
         });
         return res.json(userData);
       })
